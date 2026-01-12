@@ -32,20 +32,6 @@ app.get("/hello", (req, res) => {
     res.json({ message: "Hello, world!" });
 })
 
-if (process.env.NODE_ENV === 'production') {
-    const staticPath = path.join(__dirname, '../../frontend/dist');
-    const indexPath = path.join(__dirname, '../../frontend/dist/index.html');
-
-    app.use(express.static(staticPath));
-
-    
-    app.use((req, res, next) => {
-        if (req.path.startsWith("/api")) {
-            return next();
-        }
-        res.sendFile(indexPath);
-    });
-}
 
 
 
