@@ -16,6 +16,17 @@ const PORT = ENV.PORT
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Connect to DB on each request for serverless
+app.use(async (req, res, next) => {
+    try {
+        await connectDB();
+        next();
+    } catch (error) {
+        console.error("Database connection error:", error);
+        res.status(500).json({ message: "Database connection failed" });
+    }
+});
+
 app.use(express.json());
 app.use(cors(
     {
