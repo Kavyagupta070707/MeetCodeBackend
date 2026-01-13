@@ -10,13 +10,8 @@ import sessionRoutes from "./routes/sessionRoutes.js";
 
 const app = express();
 
-let isConnected = false;
-app.use(async (req, res, next) => {
-  if (!isConnected) {
-    await connectDB();
-    isConnected = true;
-  }
-  next();
+connectDB().catch(err => {
+  console.error("Failed to connect to database:", err);
 });
 
 app.use(
