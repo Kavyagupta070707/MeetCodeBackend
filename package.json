@@ -16,7 +16,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "inngest": "^3.44.3",
+    "inngest": "^3.54.0",
     "meetcode": "file:../..",
     "mongoose": "^9.1.2",
     "socket.io": "^4.8.1"
