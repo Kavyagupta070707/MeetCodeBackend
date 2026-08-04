@@ -8,7 +8,11 @@
   ],
   "routes": [
     {
-       "src": "/api/(.*)",
+      "src": "/socket.io/(.*)",
+      "dest": "/src/server.js"
+    },
+    {
+      "src": "/api/(.*)",
       "dest": "/src/server.js"
     }
   ]
