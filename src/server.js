@@ -1,12 +1,14 @@
 import express from "express";
 import cors from "cors";
+import http from "http";
 import { ENV } from "./lib/env.js";
 import { connectDB } from "./lib/db.js";
 import { serve } from "inngest/express";
 import { inngest, functions } from "./lib/inngest.js";
 import { clerkMiddleware } from "@clerk/express";
-import chatRoutes from "./routes/chatRoutes.js";
 import sessionRoutes from "./routes/sessionRoutes.js";
+import codeRoutes from "./routes/codeRoutes.js";
+import { initializeSocket } from "./lib/socket.js";
 
 const app = express();
 
@@ -30,12 +32,21 @@ app.use(express.json());
 app.use(clerkMiddleware());
 
 app.use("/api/inngest", serve({ client: inngest, functions }));
-app.use("/api/chat", chatRoutes);
+app.use("/api/code", codeRoutes);
 app.use("/api/sessions", sessionRoutes);
 
 app.get("/api/hello", (req, res) => {
   res.json({ message: "Hello, world!" });
 });
 
+const server = http.createServer(app);
+initializeSocket(server, ENV.CLIENT_URL);
+
+if (process.env.VERCEL !== "1") {
+  const port = ENV.PORT || 5000;
+  server.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+  });
+}
 
 export default app;

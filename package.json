@@ -13,14 +13,13 @@
   "license": "ISC",
   "dependencies": {
     "@clerk/express": "^1.7.62",
-    "@stream-io/node-sdk": "^0.7.12",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "inngest": "^3.44.3",
-    "meetcode": "file:..",
+    "meetcode": "file:../..",
     "mongoose": "^9.1.2",
-    "stream-chat": "^9.27.2"
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"

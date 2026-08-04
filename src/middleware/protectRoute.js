@@ -1,13 +1,16 @@
 import User from "../models/User.js";
+import { connectDB } from "../lib/db.js";
 
 export const protectRoute = async (req, res, next) => {
   try {
-    // clerkMiddleware() already ran, so req.auth is available
-    const { userId } = req.auth;
+    // clerkMiddleware() already ran, so req.auth should be available.
+    const userId = req.auth?.userId;
     
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized - No valid session" });
     }
+
+    await connectDB();
     
     const user = await User.findOne({ clerkId: userId });
     

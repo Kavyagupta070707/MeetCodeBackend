@@ -1,7 +1,6 @@
 import {Inngest} from "inngest";
 import { connectDB } from "./db.js";
 import User from "../models/User.js";
-import { deleteStreamUser, upsertStreamUser } from "./stream.js";
 
 export const inngest = new Inngest({ id: "meetcode-app"})
 
@@ -20,13 +19,6 @@ const syncUser = inngest.createFunction(
         })
 
         await User.create(newUser);
-
-
-        await upsertStreamUser({
-            id: newUser.id.toString(),
-            name: newUser.name,
-            image: newUser.profileimage
-        })
     }
 ) 
 const deleteUser = inngest.createFunction(
@@ -38,8 +30,6 @@ const deleteUser = inngest.createFunction(
 
        
         await User.deleteOne({ clerkId: id });
-
-        await deleteStreamUser(id.toString());
     }
 ) 
 
