@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 import User from "./User.js"
 const sessionschema = new mongoose.Schema({
+    mode:{
+        type: String,
+        enum: ['private','one-v-one'],
+        default: 'private'
+    },
     problemTitle: {
         type: String,
         required: true
@@ -29,8 +34,35 @@ const sessionschema = new mongoose.Schema({
     },
     status:{
         type: String,
-        enum: ['active','completed'],
+        enum: ['waiting','active','completed'],
         default: 'active'
+    },
+    winner:{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: User,
+        default: null
+    },
+    loser:{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: User,
+        default: null
+    },
+    result:{
+        type: String,
+        enum: ['winner','draw','cancelled', null],
+        default: null
+    },
+    startedAt:{
+        type: Date,
+        default: null
+    },
+    endsAt:{
+        type: Date,
+        default: null
+    },
+    completedAt:{
+        type: Date,
+        default: null
     },
     callId:{
         type: String,

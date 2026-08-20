@@ -1,5 +1,13 @@
 import Session from "../models/Session.js";
 
+const privateSessionFilter = {
+    $or: [{ mode: "private" }, { mode: { $exists: false } }]
+};
+
+function isPrivateSession(session) {
+    return !session.mode || session.mode === "private";
+}
+
 function generateSessionCode() {
     const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let code = "";
@@ -35,6 +43,7 @@ export async function createSession(req,res){
         const sessionCode = await createUniqueSessionCode();
 
         const session = await Session.create({
+            mode: "private",
             problemTitle: problem,
             difficulty,
             host: userId,
@@ -54,7 +63,10 @@ export async function getActiveSessions(req,res){
         const userId = req.user._id;
         const activeSessions = await Session.find({
             status: "active",
-            $or:[{ host: userId }, { participant: userId }]
+            $and: [
+                privateSessionFilter,
+                { $or:[{ host: userId }, { participant: userId }] }
+            ]
         })
         .populate("host", "name profileImage clerkId email")
         .populate("participant", "name profileImage clerkId email")
@@ -70,8 +82,13 @@ export async function getActiveSessions(req,res){
 export async function getPastSessions(req,res){ 
     try {
         const userId = req.user._id;
-        const pastSessions = await Session.find({ status: "completed", 
-            $or:[{ host: userId }, { participant: userId }] })
+        const pastSessions = await Session.find({
+            status: "completed",
+            $and: [
+                privateSessionFilter,
+                { $or:[{ host: userId }, { participant: userId }] }
+            ]
+        })
         .populate("host", "name profileImage clerkId email")
         .sort({ createdAt: -1 })
         .limit(20);
@@ -91,7 +108,7 @@ export async function getSessionById(req,res){
         .populate("host", "name profileImage clerkId email")
         .populate("participant", "name profileImage clerkId email");
 
-        if(!session){
+        if(!session || !isPrivateSession(session)){
             return res.status(404).json({ message: "Session not found" })
         }
 
@@ -119,9 +136,12 @@ export async function joinSessionByCode(req,res){
             return res.status(400).json({ message: "Session code is required" })
         }
 
-        const session = await Session.findOne({ sessionCode: normalizedCode });
+        const session = await Session.findOne({
+            sessionCode: normalizedCode,
+            ...privateSessionFilter
+        });
 
-        if(!session){
+        if(!session || !isPrivateSession(session)){
             return res.status(404).json({ message: "Session not found" })
         }
 
@@ -165,7 +185,7 @@ export async function endSession(req,res){
 
         const session = await Session.findById(id);
 
-        if(!session){
+        if(!session || !isPrivateSession(session)){
             return res.status(404).json({ message: "Session not found" })
         }
 
