@@ -40,6 +40,68 @@ async function completeExpiredOneVOneSessions() {
   );
 }
 
+async function applyRatingResult({ winnerId, loserId, sessionId, loserReason = "loss" }) {
+  await User.updateMany(
+    {
+      _id: { $in: [winnerId, loserId] },
+      $or: [{ rating: { $exists: false } }, { rating: null }],
+    },
+    {
+      $set: { rating: 1000 },
+    }
+  );
+
+  const [winner, loser] = await Promise.all([
+    User.findById(winnerId),
+    User.findById(loserId),
+  ]);
+
+  if (!winner || !loser) {
+    throw new Error("Could not update ratings because one player was not found");
+  }
+
+  const winnerRating = (winner.rating ?? 1000) + 10;
+  const loserRating = (loser.rating ?? 1000) - 10;
+  const createdAt = new Date();
+
+  await User.bulkWrite([
+    {
+      updateOne: {
+        filter: { _id: winnerId },
+        update: {
+          $set: { rating: winnerRating },
+          $push: {
+            ratingHistory: {
+              rating: winnerRating,
+              change: 10,
+              reason: "win",
+              session: sessionId,
+              createdAt,
+            },
+          },
+        },
+      },
+    },
+    {
+      updateOne: {
+        filter: { _id: loserId },
+        update: {
+          $set: { rating: loserRating },
+          $push: {
+            ratingHistory: {
+              rating: loserRating,
+              change: -10,
+              reason: loserReason,
+              session: sessionId,
+              createdAt,
+            },
+          },
+        },
+      },
+    },
+  ]);
+}
+
 export async function matchOneVOneSession(req, res) {
   try {
     await completeExpiredOneVOneSessions();
@@ -227,30 +289,12 @@ export async function submitOneVOneWin(req, res) {
       return res.status(400).json({ message: "Match is already completed", session: populatedSession });
     }
 
-    await User.updateMany(
-      {
-        _id: { $in: [userId, loserId] },
-        $or: [{ rating: { $exists: false } }, { rating: null }],
-      },
-      {
-        $set: { rating: 1000 },
-      }
-    );
-
-    await User.bulkWrite([
-      {
-        updateOne: {
-          filter: { _id: userId },
-          update: { $inc: { rating: 10 } },
-        },
-      },
-      {
-        updateOne: {
-          filter: { _id: loserId },
-          update: { $inc: { rating: -10 } },
-        },
-      },
-    ]);
+    await applyRatingResult({
+      winnerId: userId,
+      loserId,
+      sessionId: completedSession._id,
+      loserReason: "loss",
+    });
 
     const populatedSession = await populateOneVOneSession(completedSession._id);
     return res.status(200).json({ session: populatedSession });
@@ -331,30 +375,12 @@ export async function leaveOneVOneSession(req, res) {
       return res.status(400).json({ message: "Match is already completed", session: populatedSession });
     }
 
-    await User.updateMany(
-      {
-        _id: { $in: [winnerId, loserId] },
-        $or: [{ rating: { $exists: false } }, { rating: null }],
-      },
-      {
-        $set: { rating: 1000 },
-      }
-    );
-
-    await User.bulkWrite([
-      {
-        updateOne: {
-          filter: { _id: winnerId },
-          update: { $inc: { rating: 10 } },
-        },
-      },
-      {
-        updateOne: {
-          filter: { _id: loserId },
-          update: { $inc: { rating: -10 } },
-        },
-      },
-    ]);
+    await applyRatingResult({
+      winnerId,
+      loserId,
+      sessionId: completedSession._id,
+      loserReason: "forfeit",
+    });
 
     const populatedSession = await populateOneVOneSession(completedSession._id);
     return res.status(200).json({ session: populatedSession });
