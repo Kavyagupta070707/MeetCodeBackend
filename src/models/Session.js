@@ -52,6 +52,11 @@ const sessionschema = new mongoose.Schema({
         enum: ['winner','draw','cancelled', null],
         default: null
     },
+    resultReason:{
+        type: String,
+        enum: ['solved','forfeit','timeout','cancelled', null],
+        default: null
+    },
     startedAt:{
         type: Date,
         default: null

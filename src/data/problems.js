@@ -31,10 +31,13 @@ export const PROBLEM_POOL = [
   },
 ];
 
-export function getRandomProblemByDifficulty(difficulty) {
+export function getRandomProblemByDifficulty(difficulty, excludedTitle = "") {
   const matches = PROBLEM_POOL.filter((problem) => problem.difficulty === difficulty);
 
   if (matches.length === 0) return null;
 
-  return matches[Math.floor(Math.random() * matches.length)];
+  const eligibleMatches = matches.filter((problem) => problem.title !== excludedTitle);
+  const randomMatches = eligibleMatches.length > 0 ? eligibleMatches : matches;
+
+  return randomMatches[Math.floor(Math.random() * randomMatches.length)];
 }

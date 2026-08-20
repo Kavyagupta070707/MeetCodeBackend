@@ -18,6 +18,10 @@ const userschema = new mongoose.Schema({
         type: String,
         required: true,
         unique:  true
+    },
+    rating:{
+        type: Number,
+        default: 1000
     }
 },{timestamps: true})
 

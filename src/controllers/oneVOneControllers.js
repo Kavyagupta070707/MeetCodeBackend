@@ -1,4 +1,5 @@
 import Session from "../models/Session.js";
+import User from "../models/User.js";
 import { getRandomProblemByDifficulty } from "../data/problems.js";
 
 const MATCH_DURATION_MS = 15 * 60 * 1000;
@@ -14,10 +15,10 @@ function normalizeDifficulty(difficulty) {
 
 async function populateOneVOneSession(sessionId) {
   return Session.findById(sessionId)
-    .populate("host", "name profileImage clerkId email")
-    .populate("participant", "name profileImage clerkId email")
-    .populate("winner", "name profileImage clerkId email")
-    .populate("loser", "name profileImage clerkId email");
+    .populate("host", "name profileimage profileImage clerkId email rating")
+    .populate("participant", "name profileimage profileImage clerkId email rating")
+    .populate("winner", "name profileimage profileImage clerkId email rating")
+    .populate("loser", "name profileimage profileImage clerkId email rating");
 }
 
 async function completeExpiredOneVOneSessions() {
@@ -32,6 +33,7 @@ async function completeExpiredOneVOneSessions() {
       $set: {
         status: "completed",
         result: "draw",
+        resultReason: "timeout",
         completedAt: new Date(),
       },
     }
@@ -49,16 +51,41 @@ export async function matchOneVOneSession(req, res) {
       return res.status(400).json({ message: "Valid difficulty is required" });
     }
 
-    const existingSession = await Session.findOne({
+    const activeSession = await Session.findOne({
       mode: "one-v-one",
-      status: { $in: ["waiting", "active"] },
+      status: "active",
       $or: [{ host: userId }, { participant: userId }],
     }).sort({ createdAt: -1 });
 
-    if (existingSession) {
-      const session = await populateOneVOneSession(existingSession._id);
+    if (activeSession) {
+      const session = await populateOneVOneSession(activeSession._id);
       return res.status(200).json({ session });
     }
+
+    const previousWaitingSession = await Session.findOne({
+      mode: "one-v-one",
+      status: "waiting",
+      host: userId,
+      participant: null,
+      difficulty,
+    }).sort({ createdAt: -1 });
+
+    await Session.updateMany(
+      {
+        mode: "one-v-one",
+        status: "waiting",
+        host: userId,
+        participant: null,
+      },
+      {
+        $set: {
+          status: "completed",
+          result: "cancelled",
+          resultReason: "cancelled",
+          completedAt: new Date(),
+        },
+      }
+    );
 
     const startTime = new Date();
     const matchedSession = await Session.findOneAndUpdate(
@@ -85,7 +112,7 @@ export async function matchOneVOneSession(req, res) {
       return res.status(200).json({ session });
     }
 
-    const problem = getRandomProblemByDifficulty(difficulty);
+    const problem = getRandomProblemByDifficulty(difficulty, previousWaitingSession?.problemTitle);
 
     if (!problem) {
       return res.status(400).json({ message: "No problems are available for this difficulty" });
@@ -165,6 +192,7 @@ export async function submitOneVOneWin(req, res) {
     if (session.endsAt && session.endsAt <= new Date()) {
       session.status = "completed";
       session.result = "draw";
+      session.resultReason = "timeout";
       session.completedAt = new Date();
       await session.save();
 
@@ -173,18 +201,165 @@ export async function submitOneVOneWin(req, res) {
     }
 
     const loserId = isHost ? session.participant : session.host;
+    const completedAt = new Date();
+    const completedSession = await Session.findOneAndUpdate(
+      {
+        _id: session._id,
+        mode: "one-v-one",
+        status: "active",
+        winner: null,
+      },
+      {
+        $set: {
+          winner: userId,
+          loser: loserId,
+          result: "winner",
+          resultReason: "solved",
+          status: "completed",
+          completedAt,
+        },
+      },
+      { new: true }
+    );
 
-    session.winner = userId;
-    session.loser = loserId;
-    session.result = "winner";
-    session.status = "completed";
-    session.completedAt = new Date();
-    await session.save();
+    if (!completedSession) {
+      const populatedSession = await populateOneVOneSession(session._id);
+      return res.status(400).json({ message: "Match is already completed", session: populatedSession });
+    }
 
-    const populatedSession = await populateOneVOneSession(session._id);
+    await User.updateMany(
+      {
+        _id: { $in: [userId, loserId] },
+        $or: [{ rating: { $exists: false } }, { rating: null }],
+      },
+      {
+        $set: { rating: 1000 },
+      }
+    );
+
+    await User.bulkWrite([
+      {
+        updateOne: {
+          filter: { _id: userId },
+          update: { $inc: { rating: 10 } },
+        },
+      },
+      {
+        updateOne: {
+          filter: { _id: loserId },
+          update: { $inc: { rating: -10 } },
+        },
+      },
+    ]);
+
+    const populatedSession = await populateOneVOneSession(completedSession._id);
     return res.status(200).json({ session: populatedSession });
   } catch (error) {
     console.error("Error in submitOneVOneWin controller", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+}
+
+export async function leaveOneVOneSession(req, res) {
+  try {
+    await completeExpiredOneVOneSessions();
+
+    const { id } = req.params;
+    const userId = req.user._id;
+    const session = await Session.findById(id);
+
+    if (!session || session.mode !== "one-v-one") {
+      return res.status(404).json({ message: "1v1 session not found" });
+    }
+
+    const isHost = session.host?.toString() === userId.toString();
+    const isParticipant = session.participant?.toString() === userId.toString();
+
+    if (!isHost && !isParticipant) {
+      return res.status(403).json({ message: "You are not part of this 1v1 session" });
+    }
+
+    if (session.status === "completed") {
+      const populatedSession = await populateOneVOneSession(session._id);
+      return res.status(200).json({ session: populatedSession });
+    }
+
+    if (session.status === "waiting") {
+      if (!isHost) {
+        return res.status(403).json({ message: "Only the waiting player can cancel this match" });
+      }
+
+      session.status = "completed";
+      session.result = "cancelled";
+      session.resultReason = "cancelled";
+      session.completedAt = new Date();
+      await session.save();
+
+      const populatedSession = await populateOneVOneSession(session._id);
+      return res.status(200).json({ session: populatedSession });
+    }
+
+    if (!session.participant) {
+      return res.status(400).json({ message: "Match has not started yet" });
+    }
+
+    const winnerId = isHost ? session.participant : session.host;
+    const loserId = userId;
+    const completedAt = new Date();
+    const completedSession = await Session.findOneAndUpdate(
+      {
+        _id: session._id,
+        mode: "one-v-one",
+        status: "active",
+        winner: null,
+      },
+      {
+        $set: {
+          winner: winnerId,
+          loser: loserId,
+          result: "winner",
+          resultReason: "forfeit",
+          status: "completed",
+          completedAt,
+        },
+      },
+      { new: true }
+    );
+
+    if (!completedSession) {
+      const populatedSession = await populateOneVOneSession(session._id);
+      return res.status(400).json({ message: "Match is already completed", session: populatedSession });
+    }
+
+    await User.updateMany(
+      {
+        _id: { $in: [winnerId, loserId] },
+        $or: [{ rating: { $exists: false } }, { rating: null }],
+      },
+      {
+        $set: { rating: 1000 },
+      }
+    );
+
+    await User.bulkWrite([
+      {
+        updateOne: {
+          filter: { _id: winnerId },
+          update: { $inc: { rating: 10 } },
+        },
+      },
+      {
+        updateOne: {
+          filter: { _id: loserId },
+          update: { $inc: { rating: -10 } },
+        },
+      },
+    ]);
+
+    const populatedSession = await populateOneVOneSession(completedSession._id);
+    return res.status(200).json({ session: populatedSession });
+  } catch (error) {
+    console.error("Error in leaveOneVOneSession controller", error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 }

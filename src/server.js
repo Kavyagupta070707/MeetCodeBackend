@@ -8,6 +8,7 @@ import { inngest, functions } from "./lib/inngest.js";
 import { clerkMiddleware } from "@clerk/express";
 import sessionRoutes from "./routes/sessionRoutes.js";
 import oneVOneRoutes from "./routes/oneVOneRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 import codeRoutes from "./routes/codeRoutes.js";
 import { initializeSocket } from "./lib/socket.js";
 
@@ -34,6 +35,7 @@ app.use(clerkMiddleware());
 
 app.use("/api/inngest", serve({ client: inngest, functions }));
 app.use("/api/code", codeRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/sessions", sessionRoutes);
 app.use("/api/one-v-one", oneVOneRoutes);
 
