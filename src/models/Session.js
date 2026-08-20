@@ -20,6 +20,13 @@ const sessionschema = new mongoose.Schema({
         ref: User,
         default: null
     },
+    sessionCode:{
+        type: String,
+        unique: true,
+        sparse: true,
+        uppercase: true,
+        trim: true
+    },
     status:{
         type: String,
         enum: ['active','completed'],
