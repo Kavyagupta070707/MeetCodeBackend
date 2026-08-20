@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import { getRandomProblemByDifficulty } from "../data/problems.js";
 
 const MATCH_DURATION_MS = 15 * 60 * 1000;
+const MATCH_COUNTDOWN_MS = 5 * 1000;
 const VALID_DIFFICULTIES = ["easy", "medium", "hard"];
 
 function createCallId() {
@@ -149,7 +150,7 @@ export async function matchOneVOneSession(req, res) {
       }
     );
 
-    const startTime = new Date();
+    const startTime = new Date(Date.now() + MATCH_COUNTDOWN_MS);
     const matchedSession = await Session.findOneAndUpdate(
       {
         mode: "one-v-one",
@@ -249,6 +250,13 @@ export async function submitOneVOneWin(req, res) {
 
     if (!session.participant) {
       return res.status(400).json({ message: "Match has not started yet" });
+    }
+
+    if (session.startedAt && session.startedAt > new Date()) {
+      const populatedSession = await populateOneVOneSession(session._id);
+      return res
+        .status(400)
+        .json({ message: "Match countdown is still running", session: populatedSession });
     }
 
     if (session.endsAt && session.endsAt <= new Date()) {
