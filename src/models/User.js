@@ -40,6 +40,7 @@ const userschema = new mongoose.Schema({
             },
             session:{
                 type: mongoose.Schema.Types.ObjectId,
+                ref: "Session",
                 default: null
             },
             createdAt:{
